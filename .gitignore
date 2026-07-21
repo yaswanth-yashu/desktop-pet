@@ -1,0 +1,81 @@
+# ==========================================
+# Python Byte-compiled / optimized / dll files
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ==========================================
+# Virtual Environments (Local dependencies)
+# ==========================================
+.venv/
+venv/
+ENV/
+env/
+# Poetry, Pipenv, and Hatch environments
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ==========================================
+# Environmental variables / Secrets / Keys
+# ==========================================
+.env
+.env.*
+.secrets
+*.pem
+*.key
+
+# ==========================================
+# Testing, Coverage, and Linting
+# ==========================================
+.htmlcov/
+.tox/
+.nosexy/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ==========================================
+# Package Build and Distribution outputs
+# ==========================================
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==========================================
+# Jupyter Notebook checkpoints
+# ==========================================
+.ipynb_checkpoints
+
+# ==========================================
+# IDEs and Text Editors (VS Code, PyCharm)
+# ==========================================
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp

@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blobby Pet - Standalone Renderer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+        .header {
+            padding: 20px;
+            text-align: center;
+            z-index: 10;
+        }
+        .header h1 {
+            font-size: 2rem;
+            background: linear-gradient(90deg, #64b5f6, #90caf9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 5px;
+        }
+        .header p { color: #888; font-size: 0.9rem; }
+
+        .pet-container {
+            position: relative;
+            width: 100%;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #petCanvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+        #petCanvas:active { transform: scale(0.95); }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            padding: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            z-index: 10;
+            background: rgba(0,0,0,0.3);
+            border-radius: 16px 16px 0 0;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(100, 180, 255, 0.15);
+            color: #90caf9;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(100, 180, 255, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn:hover {
+            background: rgba(100, 180, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(100, 180, 255, 0.2);
+        }
+        .btn.active {
+            background: rgba(100, 180, 255, 0.5);
+            color: #fff;
+            box-shadow: 0 0 15px rgba(100, 180, 255, 0.4);
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.5);
+            padding: 15px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.8rem;
+            min-width: 180px;
+        }
+        .info-panel h3 { color: #64b5f6; margin-bottom: 8px; font-size: 0.9rem; }
+        .info-row { display: flex; justify-content: space-between; margin: 4px 0; }
+        .info-label { color: #888; }
+        .info-value { color: #fff; font-weight: 600; }
+
+        .click-effect {
+            position: absolute;
+            pointer-events: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(100,180,255,0.6) 0%, transparent 70%);
+            animation: ripple 0.6s ease-out forwards;
+        }
+        @keyframes ripple {
+            0% { transform: scale(0); opacity: 1; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+
+        .particles {
+            position: absolute;
+            pointer-events: none;
+        }
+        .particle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #64b5f6;
+            animation: float-up 1.5s ease-out forwards;
+        }
+        @keyframes float-up {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-80px) scale(0); opacity: 0; }
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+        }
+        .speed-control label { font-size: 0.8rem; color: #888; }
+        .speed-control input[type="range"] {
+            width: 100px;
+            accent-color: #64b5f6;
+        }
+    </style>
+<base target="_blank">
+</head>
+<body>
+    <div class="header">
+        <h1>🐾 Blobby Pet</h1>
+        <p>Click the pet to interact! Use buttons to change states.</p>
+    </div>
+
+    <div class="pet-container" id="petContainer">
+        <canvas id="petCanvas" width="192" height="208"></canvas>
+
+        <div class="info-panel">
+            <h3>📊 Pet Stats</h3>
+            <div class="info-row"><span class="info-label">State:</span><span class="info-value" id="stateDisplay">idle</span></div>
+            <div class="info-row"><span class="info-label">Frame:</span><span class="info-value" id="frameDisplay">0</span></div>
+            <div class="info-row"><span class="info-label">FPS:</span><span class="info-value" id="fpsDisplay">~8</span></div>
+            <div class="info-row"><span class="info-label">Clicks:</span><span class="info-value" id="clickDisplay">0</span></div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn active" data-state="idle">😴 Idle</button>
+        <button class="btn" data-state="runningRight">➡️ Run Right</button>
+        <button class="btn" data-state="runningLeft">⬅️ Run Left</button>
+        <button class="btn" data-state="waving">👋 Wave</button>
+        <button class="btn" data-state="jumping">⬆️ Jump</button>
+        <button class="btn" data-state="waiting">⏳ Wait</button>
+        <button class="btn" data-state="running">🏃 Run</button>
+        <button class="btn" data-state="review">🤔 Think</button>
+        <button class="btn" data-state="failed">❌ Error</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speedSlider" min="1" max="20" value="8">
+            <span id="speedValue">8</span>
+        </div>
+    </div>
+
+    <script>
+        // ==================== PET CONFIG ====================
+        const SPRITE_W = 192;
+        const SPRITE_H = 208;
+        const COLS = 8;
+        const ROWS = 9;
+
+        const STATE_ROWS = {
+            idle: 0,        // 6 frames
+            runningRight: 1,// 8 frames
+            waving: 2,      // 4 frames
+            jumping: 3,     // 5 frames
+            failed: 4,      // 8 frames
+            waiting: 5,     // 6 frames
+            running: 6,     // 6 frames
+            runningLeft: 7, // 8 frames
+            review: 8       // 6 frames
+        };
+
+        const FRAME_COUNTS = [6, 8, 4, 5, 8, 6, 6, 8, 6];
+
+        // ==================== STATE ====================
+        let currentState = 'idle';
+        let currentFrame = 0;
+        let frameTimer = 0;
+        let fps = 8;
+        let clickCount = 0;
+        let isPaused = false;
+
+        // ==================== CANVAS SETUP ====================
+        const canvas = document.getElementById('petCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('petContainer');
+
+        // ==================== LOAD SPRITE ATLAS ====================
+        const spritesheet = new Image();
+        spritesheet.src = 'spritesheet.png'; // <-- PUT YOUR SPRITE FILE HERE
+
+        let spritesLoaded = false;
+        spritesheet.onload = () => {
+            spritesLoaded = true;
+            console.log('✅ Spritesheet loaded:', spritesheet.width + 'x' + spritesheet.height);
+        };
+        spritesheet.onerror = () => {
+            console.error('❌ Failed to load spritesheet.png');
+            // Draw a fallback pet
+            drawFallback();
+        };
+
+        // ==================== RENDERING ====================
+        function drawPet() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (!spritesLoaded) {
+                drawFallback();
+                return;
+            }
+
+            const row = STATE_ROWS[currentState];
+            const maxFrames = FRAME_COUNTS[row];
+            const frame = currentFrame % maxFrames;
+
+            const sx = frame * SPRITE_W;
+            const sy = row * SPRITE_H;
+
+            ctx.drawImage(
+                spritesheet,
+                sx, sy, SPRITE_W, SPRITE_H,
+                0, 0, SPRITE_W, SPRITE_H
+            );
+
+            // Update UI
+            document.getElementById('stateDisplay').textContent = currentState;
+            document.getElementById('frameDisplay').textContent = `${frame + 1}/${maxFrames}`;
+        }
+
+        function drawFallback() {
+            // Simple fallback blob if spritesheet fails to load
+            ctx.fillStyle = '#64b5f6';
+            ctx.beginPath();
+            ctx.ellipse(96, 110, 40, 35, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eyes
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(82, 100, 8, 0, Math.PI * 2);
+            ctx.arc(110, 100, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(84, 100, 4, 0, Math.PI * 2);
+            ctx.arc(112, 100, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Smile
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(96, 108, 10, 0.2, Math.PI - 0.2);
+            ctx.stroke();
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Loading...', 96, 180);
+        }
+
+        // ==================== ANIMATION LOOP ====================
+        function animate() {
+            if (!isPaused) {
+                frameTimer++;
+                if (frameTimer >= Math.round(60 / fps)) {
+                    frameTimer = 0;
+                    const row = STATE_ROWS[currentState];
+                    const maxFrames = FRAME_COUNTS[row];
+                    currentFrame = (currentFrame + 1) % maxFrames;
+                }
+            }
+            drawPet();
+            requestAnimationFrame(animate);
+        }
+
+        // ==================== INTERACTIONS ====================
+
+        // Click on pet
+        canvas.addEventListener('click', (e) => {
+            clickCount++;
+            document.getElementById('clickDisplay').textContent = clickCount;
+
+            // Ripple effect
+            const rect = canvas.getBoundingClientRect();
+            const ripple = document.createElement('div');
+            ripple.className = 'click-effect';
+            ripple.style.left = (e.clientX - 20) + 'px';
+            ripple.style.top = (e.clientY - 20) + 'px';
+            document.body.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 600);
+
+            // Particles
+            for (let i = 0; i < 6; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.style.left = (e.clientX + (Math.random() - 0.5) * 40) + 'px';
+                p.style.top = (e.clientY + (Math.random() - 0.5) * 20) + 'px';
+                p.style.background = ['#64b5f6', '#90caf9', '#bbdefb', '#e3f2fd'][Math.floor(Math.random() * 4)];
+                p.style.animationDelay = (Math.random() * 0.3) + 's';
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 1800);
+            }
+
+            // Temporarily switch to waving
+            const prevState = currentState;
+            setState('waving');
+            setTimeout(() => {
+                if (currentState === 'waving') setState(prevState);
+            }, 800);
+        });
+
+        // State buttons
+        document.querySelectorAll('.btn[data-state]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const state = btn.dataset.state;
+                setState(state);
+
+                // Update active button
+                document.querySelectorAll('.btn[data-state]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+
+        function setState(state) {
+            currentState = state;
+            currentFrame = 0;
+            frameTimer = 0;
+        }
+
+        // Speed slider
+        const speedSlider = document.getElementById('speedSlider');
+        const speedValue = document.getElementById('speedValue');
+        speedSlider.addEventListener('input', () => {
+            fps = parseInt(speedSlider.value);
+            speedValue.textContent = fps;
+            document.getElementById('fpsDisplay').textContent = '~' + fps;
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            const keyMap = {
+                '1': 'idle', '2': 'runningRight', '3': 'runningLeft',
+                '4': 'waving', '5': 'jumping', '6': 'waiting',
+                '7': 'running', '8': 'review', '9': 'failed'
+            };
+            if (keyMap[e.key]) {
+                setState(keyMap[e.key]);
+                document.querySelectorAll('.btn[data-state]').forEach(b => {
+                    b.classList.toggle('active', b.dataset.state === keyMap[e.key]);
+                });
+            }
+            if (e.key === ' ') {
+                isPaused = !isPaused;
+            }
+        });
+
+        // ==================== AUTO STATE DEMO ====================
+        // Cycles through states automatically (optional)
+        let autoDemo = false;
+        let demoIndex = 0;
+        const demoStates = ['idle', 'runningRight', 'waving', 'jumping', 'waiting', 'running', 'runningLeft', 'review', 'failed'];
+
+        // Uncomment to enable auto demo:
+        // setInterval(() => {
+        //     if (autoDemo) {
+        //         demoIndex = (demoIndex + 1) % demoStates.length;
+        //         setState(demoStates[demoIndex]);
+        //     }
+        // }, 3000);
+
+        // ==================== START ====================
+        animate();
+        console.log('🐾 Blobby Pet initialized!');
+        console.log('Controls: Click pet to interact, 1-9 keys for states, Space to pause');
+    </script>
+</body>
+</html>
