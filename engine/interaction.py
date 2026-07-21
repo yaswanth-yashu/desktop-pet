@@ -97,8 +97,6 @@ class InteractionManager:
         self.last_global_pos = None
 
     def handle_double_click(self):
-        """Double click gesture triggers waving."""
-        if self.pet.state_machine.current_state.is_interruptible:
-            self.pet.state_machine.change_state("wave")
-            self.pet.say("Hello world! 👋", duration=3.0)
-            self.pet.play_sound("wave")
+        """Double click gesture toggles voice chat session."""
+        if hasattr(self.pet, 'main_app') and self.pet.main_app:
+            self.pet.main_app.toggle_voice_chat()

@@ -36,7 +36,7 @@ class WalkLeftState(State):
     def __init__(self, pet):
         super().__init__(pet)
         self.name = "walk_left"
-        self.animation_name = "run_left"
+        self.animation_name = "run_right"
         self.is_interruptible = True
         self.walk_speed = -60.0
 
@@ -157,7 +157,13 @@ class LandingState(State):
     def update(self, dt):
         self.timer += dt
         if self.timer >= self.landing_duration:
-            return "idle"
+            is_voice_active = (
+                hasattr(self.pet, 'main_app') and 
+                hasattr(self.pet.main_app, 'gemini_client') and 
+                self.pet.main_app.gemini_client and 
+                self.pet.main_app.gemini_client.is_active
+            )
+            return "waiting" if is_voice_active else "idle"
         return None
 
 
@@ -171,7 +177,25 @@ class WaveState(State):
     def update(self, dt):
         anim = self.pet.sprite.current_animation
         if anim and anim.is_finished:
-            return "idle"
+            is_speaking = (
+                hasattr(self.pet, 'main_app') and 
+                hasattr(self.pet.main_app, 'gemini_client') and 
+                self.pet.main_app.gemini_client and 
+                self.pet.main_app.gemini_client.is_speaking
+            )
+            if is_speaking:
+                # Reset playhead to loop wave animation while speaking
+                anim.current_frame_index = 0
+                anim.is_finished = False
+                return None
+            
+            is_voice_active = (
+                hasattr(self.pet, 'main_app') and 
+                hasattr(self.pet.main_app, 'gemini_client') and 
+                self.pet.main_app.gemini_client and 
+                self.pet.main_app.gemini_client.is_active
+            )
+            return "waiting" if is_voice_active else "idle"
         return None
 
 
@@ -185,6 +209,17 @@ class ReviewState(State):
     def update(self, dt):
         anim = self.pet.sprite.current_animation
         if anim and anim.is_finished:
+            is_voice_active = (
+                hasattr(self.pet, 'main_app') and 
+                hasattr(self.pet.main_app, 'gemini_client') and 
+                self.pet.main_app.gemini_client and 
+                self.pet.main_app.gemini_client.is_active
+            )
+            if is_voice_active:
+                # Loop review animation while voice chat is active (until model starts speaking/wave)
+                anim.current_frame_index = 0
+                anim.is_finished = False
+                return None
             return "idle"
         return None
 
@@ -199,7 +234,13 @@ class FailedState(State):
     def update(self, dt):
         anim = self.pet.sprite.current_animation
         if anim and anim.is_finished:
-            return "idle"
+            is_voice_active = (
+                hasattr(self.pet, 'main_app') and 
+                hasattr(self.pet.main_app, 'gemini_client') and 
+                self.pet.main_app.gemini_client and 
+                self.pet.main_app.gemini_client.is_active
+            )
+            return "waiting" if is_voice_active else "idle"
         return None
 
 

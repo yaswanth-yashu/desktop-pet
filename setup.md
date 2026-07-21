@@ -12,3 +12,6 @@ python scratch/verify_assets.py
 
 # 5. Start EVE
 python main.py
+
+..\venv\Scripts\python.exe main.py
+

@@ -73,7 +73,12 @@ class Pet:
                 break
 
         if not sound_path:
-            return  # Quietly ignore if sound file is not present
+            if not hasattr(self, "_logged_missing_sounds"):
+                self._logged_missing_sounds = set()
+            if sound_name not in self._logged_missing_sounds:
+                print(f"[Pet] Warning: Missing audio asset for sound '{sound_name}' under {os.path.join(self.asset_dir, 'sounds')}")
+                self._logged_missing_sounds.add(sound_name)
+            return
 
         try:
             if sound_path not in self.loaded_sounds:

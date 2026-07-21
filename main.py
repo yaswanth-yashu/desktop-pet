@@ -3,15 +3,16 @@ import sys
 import json
 import time
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, QThread, QObject
 from PySide6.QtGui import QCursor, Qt
 
 from engine.sprite import SpriteLoader
 from engine.pet import Pet
 from ui.transparent_window import TransparentWindow
 
-class DesktopPetApp:
+class DesktopPetApp(QObject):
     def __init__(self):
+        super().__init__()
         self.app = QApplication(sys.argv)
         
         # Scan for companion plugins in assets/
@@ -65,9 +66,35 @@ class DesktopPetApp:
         
         self.window.show()
 
+        # Initial welcome greeting on launch
+        self.pet.say("Hey, ready to learn something new?", duration=4.5)
+
         # Initialize Gemini Live voice-to-voice client
         from engine.gemini_live import GeminiLiveClient
+        
+        self.gemini_thread = QThread()
         self.gemini_client = GeminiLiveClient(self.pet, self)
+        self.gemini_client.moveToThread(self.gemini_thread)
+        
+        # Connect signals for thread-safe UI updates
+        self.gemini_client.say_requested.connect(self.pet.say)
+        self.gemini_client.animation_requested.connect(self.set_active_animation)
+        self.gemini_client.session_activated.connect(self.on_gemini_session_activated)
+        
+        # Connect conversational state transitions
+        self.gemini_client.text_received.connect(self.on_gemini_speaking)
+        self.gemini_client.turn_completed.connect(self.on_gemini_turn_completed)
+        self.gemini_client.interrupted.connect(self.on_gemini_interrupted)
+        self.gemini_client.thinking_started.connect(self.on_gemini_thinking)
+        self.gemini_client.state_changed.connect(self.on_gemini_state_changed)
+        
+        # Failsafe timer for stuck voice states (network/event drops)
+        self.voice_failsafe_timer = QTimer()
+        self.voice_failsafe_timer.setSingleShot(True)
+        self.voice_failsafe_timer.timeout.connect(self.on_voice_failsafe_timeout)
+        
+        # Start background thread execution context
+        self.gemini_thread.start()
 
         # Start game loop timer (60 FPS)
         self.last_time = time.time()
@@ -157,6 +184,11 @@ class DesktopPetApp:
         self.pet = self.load_pet_instance(pet_id)
         if hasattr(self, 'gemini_client') and self.gemini_client:
             self.gemini_client.pet = self.pet
+            try:
+                self.gemini_client.say_requested.disconnect()
+            except Exception:
+                pass
+            self.gemini_client.say_requested.connect(self.pet.say)
         self.pet.physics.x = float(old_x)
         self.pet.physics.y = float(old_y)
 
@@ -315,9 +347,79 @@ class DesktopPetApp:
             if not is_voice_chat_active:
                 self.pet.say(f"State: {state_name}", duration=2.0)
 
+    def start_voice_failsafe(self, ms=60000):
+        if hasattr(self, "voice_failsafe_timer"):
+            self.voice_failsafe_timer.start(ms)
+
+    def stop_voice_failsafe(self):
+        if hasattr(self, "voice_failsafe_timer"):
+            self.voice_failsafe_timer.stop()
+
+    def on_voice_failsafe_timeout(self):
+        print("[Engine] Inactivity timeout: 1 minute of silence reached. Automatically stopping voice chat.")
+        if hasattr(self, "gemini_client") and self.gemini_client and self.gemini_client.is_active:
+            self.gemini_client.stop()
+
+    def on_gemini_session_activated(self):
+        """Slot to safely pause pet actions during active voice chat session."""
+        if self.pet:
+            self.pet.physics.vx = 0.0
+            self.pet.physics.vy = 0.0
+            self.pet.state_machine.change_state("idle")
+            self.start_voice_failsafe()
+
+    def on_gemini_thinking(self):
+        """Transition pet to thinking animation (review) when Gemini is generating."""
+        if self.pet:
+            self.pet.state_machine.change_state("review")
+            self.start_voice_failsafe()
+
+    def on_gemini_speaking(self):
+        """Transition pet to speaking animation (wave) when Gemini starts speaking."""
+        if self.pet and self.pet.state_machine.current_state.name != "wave":
+            self.pet.state_machine.change_state("wave")
+            self.start_voice_failsafe()
+
+    def on_gemini_turn_completed(self):
+        """Transition pet back to idle state once model stops speaking and wait for user."""
+        if self.pet:
+            self.pet.state_machine.change_state("idle")
+            self.start_voice_failsafe()
+
+    def on_gemini_interrupted(self):
+        """Immediately force pet to idle state when user interrupts."""
+        if self.pet:
+            self.pet.state_machine.change_state("idle")
+            self.start_voice_failsafe()
+
+    def on_gemini_state_changed(self, status):
+        """Cleanly disable failsafe timer and revert to idle when voice chat stops."""
+        if status in ("disconnected", "error"):
+            self.stop_voice_failsafe()
+            if self.pet:
+                self.pet.state_machine.change_state("idle")
+
+    def toggle_voice_chat(self):
+        """Helper to start/stop the voice chat session dynamically (e.g. on double-click)."""
+        if hasattr(self, "gemini_client") and self.gemini_client:
+            client = self.gemini_client
+            if client.status in ("disconnected", "error"):
+                client.start()
+            elif client.status == "connected":
+                client.stop()
+
     def exit_application(self):
         """Saves settings and shuts down the pet engine."""
         self.save_settings()
+        
+        # Clean up Gemini client thread
+        if hasattr(self, "gemini_client") and self.gemini_client:
+            QTimer.singleShot(0, self.gemini_client.stop)
+            
+        if hasattr(self, "gemini_thread") and self.gemini_thread:
+            self.gemini_thread.quit()
+            self.gemini_thread.wait()
+            
         self.app.quit()
 
     def run(self):
